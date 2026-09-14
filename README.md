@@ -3,7 +3,7 @@
 Coleta as datas de início e fim do ano letivo 2026 das redes municipais de ensino da Bahia.
 
 - **Front**: `index.html` estático (Vercel).
-- **Back**: `codigo.gs` no Google Apps Script, grava em Google Sheets.
+- **Back**: `codigo.gs` no Google Apps Script, grava na planilha [140926 - Calendário Letivo 2026](https://docs.google.com/spreadsheets/d/1A87OsuoxTzUEfHceo1MyVACCR0g-noEZGslMbwtftN0/edit).
 - **Prazo**: 22/09/2026, 23:59 (-03:00) — bloqueio automático no front e no back.
 - **Regra**: 1 resposta por município (bloqueio pelo código IBGE).
 
@@ -20,16 +20,17 @@ Coleta as datas de início e fim do ano letivo 2026 das redes municipais de ensi
 
 ### 1. Google Sheets + Apps Script
 
-1. Crie uma planilha Google em branco. Nomeie, por exemplo, `Calendário Letivo 2026 — Municipal`.
+1. Abra a planilha [140926 - Calendário Letivo 2026](https://docs.google.com/spreadsheets/d/1A87OsuoxTzUEfHceo1MyVACCR0g-noEZGslMbwtftN0/edit). As abas `Respostas` e `Acompanhamento` são criadas pelo script; não precisa montá-las à mão.
 2. Menu **Extensões → Apps Script**.
 3. Apague o `Código.gs` padrão e cole o conteúdo de `codigo.gs`.
-4. Salve (`Ctrl+S`).
-5. **Implantar → Nova implantação**:
+4. Salve (`Ctrl+S`). O ID da planilha já vem fixado em `SPREADSHEET_ID` (linha 14 do `codigo.gs`) — só precisa trocar se um dia a planilha de destino mudar.
+5. Rode a função `onOpen` uma vez pelo editor para disparar a tela de autorização e conceder as permissões.
+6. **Implantar → Nova implantação**:
    - Tipo: **App da Web**.
    - Executar como: **eu**.
    - Quem tem acesso: **Qualquer pessoa** (necessário para o formulário público chamar).
    - Clique em **Implantar**.
-6. Copie a **URL do app da Web** (algo como `https://script.google.com/macros/s/AKfy.../exec`).
+7. Copie a **URL do app da Web** (algo como `https://script.google.com/macros/s/AKfy.../exec`).
 
 ### 2. Front (GitHub + Vercel)
 
@@ -37,7 +38,7 @@ Coleta as datas de início e fim do ano letivo 2026 das redes municipais de ensi
    ```js
    var APPS_SCRIPT_URL = 'COLOQUE_A_URL_DO_WEB_APP_AQUI';
    ```
-   pela URL copiada no passo 1.6.
+   pela URL copiada no passo 1.7.
 
 2. Suba os arquivos num repositório novo do GitHub (comandos abaixo).
 
@@ -68,6 +69,7 @@ Data/Hora · Nome · E-mail · Telefone · Cargo · CodMunicipio · Municipio ·
 
 ## Alterando o formulário depois
 
+- **Mudar a planilha de destino**: alterar `SPREADSHEET_ID` (linha 14 do `codigo.gs`).
 - **Mudar o prazo**: alterar `DEADLINE` (linha ~250 do `index.html`) e `DEADLINE_ISO` (linha 13 do `codigo.gs`) — os dois valores precisam bater.
 - **Mudar os cargos**: editar o `<select id="cargo">` no `index.html`.
 - **Republicar back após editar o `.gs`**: no Apps Script, **Implantar → Gerenciar implantações → editar (ícone lápis) → Nova versão → Implantar**. A URL do web app não muda.

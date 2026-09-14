@@ -8,6 +8,11 @@
  * Após a data-limite, o front bloqueia o envio; o back também trava por segurança.
  */
 
+// Planilha de destino: "140926 - Calendário Letivo 2026"
+// https://docs.google.com/spreadsheets/d/1A87OsuoxTzUEfHceo1MyVACCR0g-noEZGslMbwtftN0/edit
+// Deixe vazio ('') para usar a planilha à qual o script estiver vinculado.
+var SPREADSHEET_ID = '1A87OsuoxTzUEfHceo1MyVACCR0g-noEZGslMbwtftN0';
+
 var SHEET_RESPOSTAS = 'Respostas';
 var SHEET_ACOMPANHAMENTO = 'Acompanhamento';
 var DEADLINE_ISO = '2026-09-22T23:59:00-03:00';
@@ -520,8 +525,14 @@ function doPost(e) {
   }
 }
 
+function getSS() {
+  return SPREADSHEET_ID
+    ? SpreadsheetApp.openById(SPREADSHEET_ID)
+    : SpreadsheetApp.getActiveSpreadsheet();
+}
+
 function getRespostasSheet() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSS();
   var sheet = ss.getSheetByName(SHEET_RESPOSTAS);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_RESPOSTAS);
@@ -537,7 +548,7 @@ function getRespostasSheet() {
 }
 
 function atualizarAcompanhamento() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSS();
   var sheet = ss.getSheetByName(SHEET_ACOMPANHAMENTO);
   if (!sheet) sheet = ss.insertSheet(SHEET_ACOMPANHAMENTO);
   else { sheet.clearContents(); sheet.clearFormats(); }
