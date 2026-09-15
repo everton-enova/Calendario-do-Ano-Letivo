@@ -59,15 +59,35 @@ git push -u origin main
 ## O que a planilha vai conter
 
 **Aba `Respostas`** — registro cru:
-Data/Hora · Nome · E-mail · Telefone · Cargo · CodMunicipio · Municipio · NTE · Sede NTE · Território · Início · Fim.
+Data/Hora · Nome · E-mail · Telefone · Cargo · CodMunicipio · Municipio · NTE · Sede NTE · Território · Início · Fim · **Dias Letivos**.
 
-**Aba `Acompanhamento`** — 417 municípios da Bahia com status Pendente/Respondido, pendentes no topo (vermelho) e respondidos abaixo (verde). Atualiza automaticamente a cada resposta; também tem o botão manual **⚙️ Calendário Letivo → Atualizar Acompanhamento** no menu da planilha.
+**Aba `Acompanhamento`** — 417 municípios da Bahia com status Pendente/Respondido, pendentes no topo (vermelho) e respondidos abaixo (verde), com a coluna **Dias Letivos** entre `Fim` e `Respondente`. A linha de total traz quantos respondentes ficaram abaixo da meta. Atualiza automaticamente a cada resposta; também tem o botão manual **⚙️ Calendário Letivo → Atualizar Acompanhamento** no menu da planilha.
+
+## Coluna Dias Letivos
+
+Calculada pelo script a partir das datas declaradas, com faixas de cor:
+
+| Dias letivos | Cor |
+|---|---|
+| **200 ou mais** | verde |
+| **180 a 199** | laranja |
+| **abaixo de 180** | vermelho |
+
+**Como é contada**: dias de segunda a sexta entre início e fim (inclusive), descontando feriados nacionais e o feriado estadual da Bahia (2 de julho). Carnaval, Sexta-feira Santa e Corpus Christi são calculados a partir da Páscoa, então valem para qualquer ano.
+
+**O que a contagem não sabe**: o formulário coleta apenas início e fim, então o cálculo **não desconta** recesso escolar (julho), feriados municipais e pontos facultativos locais, e **não soma** sábados letivos. O valor é o **teto** de dias letivos do período declarado.
+
+Na prática: um ano letivo de fevereiro a dezembro dá ~220 nessa contagem e aparece verde, mesmo que o calendário real do município, já com o recesso, fique perto de 200. A coluna serve para **flagrar período declarado curto demais** — um município que informa fevereiro a outubro, por exemplo, cai em laranja (187) — não para homologar o calendário. Para um número fechado seria preciso o formulário coletar também os dias de recesso/feriado local, ou pedir os dias letivos previstos direto ao município.
+
+**Linhas antigas**: a coluna é criada e preenchida retroativamente na primeira execução após a atualização do script — abra a planilha e clique em **⚙️ Calendário Letivo → Atualizar Acompanhamento**. Corrigir uma data à mão na aba `Respostas` também recalcula o valor.
 
 ## Alterando o formulário depois
 
 - **Mudar a planilha de destino**: alterar `SPREADSHEET_ID` (linha 14 do `codigo.gs`).
 - **Mudar o prazo**: alterar `DEADLINE` (linha ~250 do `index.html`) e `DEADLINE_ISO` (linha 13 do `codigo.gs`) — os dois valores precisam bater.
 - **Mudar os cargos**: editar o `<select id="cargo">` no `index.html`.
+- **Mudar as faixas de dias letivos**: alterar `DIAS_LETIVOS_META` (verde, padrão 200) e `DIAS_LETIVOS_ALERTA` (laranja, padrão 180) no topo do `codigo.gs`.
+- **Ajustar os feriados considerados**: editar `feriadosDoAno()` no `codigo.gs` — o array `fixos` tem os de data fixa; os móveis saem da Páscoa.
 - **Republicar back após editar o `.gs`**: no Apps Script, **Implantar → Gerenciar implantações → editar (ícone lápis) → Nova versão → Implantar**. A URL do web app não muda.
 
 ## Regras já implementadas (front + back)
@@ -77,3 +97,4 @@ Data/Hora · Nome · E-mail · Telefone · Cargo · CodMunicipio · Municipio ·
 - NTE preenchido automaticamente a partir do município (mostra `NTE XX — Sede: Y — Território: Z`).
 - Datas obrigatoriamente em 2026; fim posterior ao início.
 - Após 22/09/2026 23:59 o front esconde o formulário e o back rejeita POST.
+- Dias letivos calculados a cada resposta, com faixa de cor na planilha (ver acima).

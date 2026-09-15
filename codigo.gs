@@ -17,6 +17,18 @@ var SHEET_RESPOSTAS = 'Respostas';
 var SHEET_ACOMPANHAMENTO = 'Acompanhamento';
 var DEADLINE_ISO = '2026-09-22T23:59:00-03:00';
 
+// -------- Dias letivos --------
+// Meta legal (LDB art. 24): 200 dias letivos. Faixas de cor na planilha:
+//   >= 200        verde
+//   180 a 199     laranja
+//   < 180         vermelho
+var DIAS_LETIVOS_META = 200;
+var DIAS_LETIVOS_ALERTA = 180;
+
+// Coluna "Dias Letivos" em cada aba (1-based)
+var COL_DIAS_RESPOSTAS = 13;
+var COL_DIAS_ACOMP = 6;
+
 // -------- Municípios (417 da Bahia com NTE completo) --------
 var MUNICIPIOS = [
   {c:"2900108",n:"Abaíra",nte:"NTE 03",s:"Seabra",t:"Chapada Diamantina"},
@@ -515,8 +527,10 @@ function doPost(e) {
       payload.nteSede || '',
       payload.nteTerritorio || '',
       Utilities.formatDate(ini, tz, 'dd/MM/yyyy'),
-      Utilities.formatDate(fim, tz, 'dd/MM/yyyy')
+      Utilities.formatDate(fim, tz, 'dd/MM/yyyy'),
+      contarDiasLetivos(ini, fim)
     ]);
+    pintarDiasLetivos(sheet.getRange(sheet.getLastRow(), COL_DIAS_RESPOSTAS));
 
     atualizarAcompanhamento();
     return jsonResponse({ success: true });
@@ -536,15 +550,43 @@ function getRespostasSheet() {
   var sheet = ss.getSheetByName(SHEET_RESPOSTAS);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_RESPOSTAS);
-    var header = ['Data/Hora','Nome','E-mail','Telefone','Cargo','CodMunicipio','Municipio','NTE','Sede NTE','Território','Início Ano Letivo','Fim Ano Letivo'];
+    var header = ['Data/Hora','Nome','E-mail','Telefone','Cargo','CodMunicipio','Municipio','NTE','Sede NTE','Território','Início Ano Letivo','Fim Ano Letivo','Dias Letivos'];
     sheet.appendRow(header);
     sheet.getRange(1, 1, 1, header.length)
       .setFontWeight('bold').setBackground('#1a3a8a').setFontColor('#ffffff');
     sheet.setFrozenRows(1);
-    var widths = [140, 220, 220, 130, 240, 120, 200, 90, 180, 220, 120, 120];
+    var widths = [140, 220, 220, 130, 240, 120, 200, 90, 180, 220, 120, 120, 110];
     for (var i = 0; i < widths.length; i++) sheet.setColumnWidth(i + 1, widths[i]);
+  } else {
+    garantirColunaDiasLetivos(sheet);
   }
   return sheet;
+}
+
+// A aba "Respostas" pode já existir sem a coluna Dias Letivos (criada antes
+// desta versão do script). Cria o cabeçalho quando faltar; os valores das
+// linhas antigas são preenchidos por sincronizarDiasLetivos().
+function garantirColunaDiasLetivos(sheet) {
+  if (String(sheet.getRange(1, COL_DIAS_RESPOSTAS).getValue()).trim() === 'Dias Letivos') return;
+  sheet.getRange(1, COL_DIAS_RESPOSTAS).setValue('Dias Letivos')
+    .setFontWeight('bold').setBackground('#1a3a8a').setFontColor('#ffffff');
+  sheet.setColumnWidth(COL_DIAS_RESPOSTAS, 110);
+}
+
+// Recalcula a coluna Dias Letivos de todas as linhas de "Respostas" a partir
+// das datas de início e fim, e reaplica as cores. Chamado a cada resposta nova
+// e a cada edição manual da aba, então datas corrigidas à mão se refletem aqui.
+function sincronizarDiasLetivos(sheet, dados) {
+  garantirColunaDiasLetivos(sheet);
+  var n = dados.length - 1;
+  if (n <= 0) return;
+  var valores = [];
+  for (var i = 1; i < dados.length; i++) {
+    valores.push([contarDiasLetivos(paraData(dados[i][10]), paraData(dados[i][11]))]);
+  }
+  var rng = sheet.getRange(2, COL_DIAS_RESPOSTAS, n, 1);
+  rng.setValues(valores);
+  pintarDiasLetivos(rng);
 }
 
 function atualizarAcompanhamento() {
@@ -554,7 +596,9 @@ function atualizarAcompanhamento() {
   else { sheet.clearContents(); sheet.clearFormats(); }
 
   // Índice das respostas por código IBGE
-  var respostas = getRespostasSheet().getDataRange().getValues();
+  var respSheet = getRespostasSheet();
+  var respostas = respSheet.getDataRange().getValues();
+  sincronizarDiasLetivos(respSheet, respostas);
   var mapa = {};
   for (var i = 1; i < respostas.length; i++) {
     var c = String(respostas[i][5] || '').trim();
@@ -562,6 +606,7 @@ function atualizarAcompanhamento() {
     mapa[c] = {
       inicio: respostas[i][10],
       fim: respostas[i][11],
+      dias: contarDiasLetivos(paraData(respostas[i][10]), paraData(respostas[i][11])),
       respondente: respostas[i][1],
       cargo: respostas[i][4],
       dataResposta: respostas[i][0]
@@ -574,13 +619,13 @@ function atualizarAcompanhamento() {
     var m = MUNICIPIOS[j];
     if (mapa[m.c]) {
       var r = mapa[m.c];
-      respondidos.push([m.nte, m.n, 'Respondido', r.inicio, r.fim, r.respondente, r.cargo, r.dataResposta]);
+      respondidos.push([m.nte, m.n, 'Respondido', r.inicio, r.fim, r.dias, r.respondente, r.cargo, r.dataResposta]);
     } else {
-      pendentes.push([m.nte, m.n, 'Pendente', '-', '-', '-', '-', '-']);
+      pendentes.push([m.nte, m.n, 'Pendente', '-', '-', '-', '-', '-', '-']);
     }
   }
 
-  var header = ['NTE','Município','Status','Início','Fim','Respondente','Cargo','Data da Resposta'];
+  var header = ['NTE','Município','Status','Início','Fim','Dias Letivos','Respondente','Cargo','Data da Resposta'];
   sheet.getRange(1, 1, 1, header.length).setValues([header])
     .setFontWeight('bold').setBackground('#1a3a8a').setFontColor('#ffffff');
 
@@ -594,6 +639,11 @@ function atualizarAcompanhamento() {
     for (var q = 0; q < respondidos.length; q++) {
       sheet.getRange(pendentes.length + q + 2, 1, 1, header.length).setBackground('#e8f5e9');
     }
+    // Faixas de cor da coluna Dias Letivos (sobrepõe o fundo da linha)
+    if (respondidos.length > 0) {
+      pintarDiasLetivos(sheet.getRange(pendentes.length + 2, COL_DIAS_ACOMP, respondidos.length, 1));
+    }
+    sheet.getRange(2, COL_DIAS_ACOMP, rows.length, 1).setHorizontalAlignment('center');
   }
 
   var totalRow = rows.length + 2;
@@ -601,12 +651,141 @@ function atualizarAcompanhamento() {
     .setValues([['', 'TOTAL: ' + MUNICIPIOS.length + ' municípios',
                  'Pendentes: ' + pendentes.length,
                  'Respondidos: ' + respondidos.length,
-                 '', '', '', '']])
+                 '',
+                 'Abaixo de ' + DIAS_LETIVOS_META + ': ' + contarAbaixoDaMeta(respondidos),
+                 '', '', '']])
     .setFontWeight('bold').setBackground('#e8edf5');
 
-  var widths = [90, 220, 110, 100, 100, 220, 240, 160];
+  var widths = [90, 220, 110, 100, 100, 110, 220, 240, 160];
   for (var w = 0; w < widths.length; w++) sheet.setColumnWidth(w + 1, widths[w]);
   sheet.setFrozenRows(1);
+}
+
+// -------- Contagem de dias letivos --------
+// Conta os dias de segunda a sexta entre início e fim (inclusive), descontando
+// feriados nacionais e o feriado estadual da Bahia (2 de julho).
+//
+// LIMITE DO CÁLCULO: o formulário coleta apenas início e fim, então não há como
+// descontar recesso escolar (julho), feriados municipais e pontos facultativos
+// locais, nem somar sábados letivos. O número é o TETO de dias letivos do
+// período declarado — serve para flagrar períodos curtos demais, não para
+// homologar o calendário do município.
+
+function contarDiasLetivos(ini, fim) {
+  if (!ini || !fim || isNaN(ini) || isNaN(fim) || fim < ini) return '';
+  var feriados = mapaFeriados(ini.getFullYear(), fim.getFullYear());
+  var dia = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate());
+  var ultimo = new Date(fim.getFullYear(), fim.getMonth(), fim.getDate());
+  var total = 0;
+  while (dia <= ultimo) {
+    var semana = dia.getDay();
+    if (semana !== 0 && semana !== 6 && !feriados[chaveData(dia)]) total++;
+    dia.setDate(dia.getDate() + 1);
+  }
+  return total;
+}
+
+function chaveData(d) {
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
+
+// Aceita Date (célula formatada como data) ou texto dd/MM/yyyy e yyyy-MM-dd.
+function paraData(v) {
+  if (v instanceof Date) {
+    return isNaN(v) ? null : new Date(v.getFullYear(), v.getMonth(), v.getDate());
+  }
+  var t = String(v || '').trim();
+  var m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return null;
+}
+
+function mapaFeriados(anoIni, anoFim) {
+  var mapa = {};
+  for (var ano = anoIni; ano <= anoFim; ano++) {
+    var lista = feriadosDoAno(ano);
+    for (var i = 0; i < lista.length; i++) mapa[chaveData(lista[i])] = true;
+  }
+  return mapa;
+}
+
+function feriadosDoAno(ano) {
+  // [mês (0-based), dia]
+  var fixos = [
+    [0, 1],   // Confraternização Universal
+    [3, 21],  // Tiradentes
+    [4, 1],   // Dia do Trabalho
+    [6, 2],   // Independência da Bahia (estadual)
+    [8, 7],   // Independência do Brasil
+    [9, 12],  // Nossa Senhora Aparecida
+    [10, 2],  // Finados
+    [10, 15], // Proclamação da República
+    [10, 20], // Consciência Negra
+    [11, 25]  // Natal
+  ];
+  var lista = [];
+  for (var i = 0; i < fixos.length; i++) lista.push(new Date(ano, fixos[i][0], fixos[i][1]));
+
+  var pascoa = domingoDePascoa(ano);
+  lista.push(somarDias(pascoa, -47)); // Carnaval (terça)
+  lista.push(somarDias(pascoa, -2));  // Sexta-feira Santa
+  lista.push(somarDias(pascoa, 60));  // Corpus Christi
+  return lista;
+}
+
+function somarDias(d, n) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+// Algoritmo gregoriano anônimo — Páscoa de qualquer ano.
+function domingoDePascoa(ano) {
+  var a = ano % 19;
+  var b = Math.floor(ano / 100);
+  var c = ano % 100;
+  var d = Math.floor(b / 4);
+  var e = b % 4;
+  var f = Math.floor((b + 8) / 25);
+  var g = Math.floor((b - f + 1) / 3);
+  var h = (19 * a + b - d - g + 15) % 30;
+  var i = Math.floor(c / 4);
+  var k = c % 4;
+  var l = (32 + 2 * e + 2 * i - h - k) % 7;
+  var m = Math.floor((a + 11 * h + 22 * l) / 451);
+  var n = h + l - 7 * m + 114;
+  return new Date(ano, Math.floor(n / 31) - 1, (n % 31) + 1);
+}
+
+// >= 200 verde | 180 a 199 laranja | < 180 vermelho
+function corDiasLetivos(n) {
+  if (typeof n !== 'number' || isNaN(n) || n <= 0) return { bg: '#ffffff', fc: '#666666' };
+  if (n >= DIAS_LETIVOS_META) return { bg: '#c6efce', fc: '#0b6b2f' };
+  if (n >= DIAS_LETIVOS_ALERTA) return { bg: '#ffd9a8', fc: '#8a4b00' };
+  return { bg: '#f8c9c9', fc: '#9c0006' };
+}
+
+// Aplica as faixas de cor a um intervalo de uma coluna já preenchido.
+function pintarDiasLetivos(rng) {
+  var valores = rng.getValues();
+  var fundos = [];
+  var fontes = [];
+  for (var i = 0; i < valores.length; i++) {
+    var cor = corDiasLetivos(valores[i][0]);
+    fundos.push([cor.bg]);
+    fontes.push([cor.fc]);
+  }
+  rng.setBackgrounds(fundos).setFontColors(fontes)
+    .setFontWeight('bold').setHorizontalAlignment('center');
+}
+
+function contarAbaixoDaMeta(respondidos) {
+  var n = 0;
+  for (var i = 0; i < respondidos.length; i++) {
+    var v = respondidos[i][COL_DIAS_ACOMP - 1];
+    if (typeof v === 'number' && v < DIAS_LETIVOS_META) n++;
+  }
+  return n;
 }
 
 function atualizarAcompanhamentoManual() {
