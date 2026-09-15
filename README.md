@@ -34,11 +34,7 @@ Coleta as datas de início e fim do ano letivo 2026 das redes municipais de ensi
 
 ### 2. Front (GitHub + Vercel)
 
-1. No `index.html`, substitua a linha:
-   ```js
-   var APPS_SCRIPT_URL = 'COLOQUE_A_URL_DO_WEB_APP_AQUI';
-   ```
-   pela URL copiada no passo 1.7.
+1. A URL do Web App já está gravada em `APPS_SCRIPT_URL` (linha 179 do `index.html`). Só precisa trocar se o Apps Script for reimplantado como **nova** implantação — editar uma implantação existente mantém a mesma URL.
 
 2. Suba os arquivos num repositório novo do GitHub (comandos abaixo).
 
